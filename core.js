@@ -71,8 +71,8 @@ async function geminiCall(system, contents, json) {
   const list = [S.settings.geminiModel, ...GEM_MODELS.filter(m => m !== S.settings.geminiModel)];
   let last;
   for (const m of list) {
-    try { const t = await geminiOnce(m, system, contents, json); if (m !== S.settings.geminiModel) { S.settings.geminiModel = m; save(); } return t; }
-    catch (e) { last = e; if (e.status !== 404 && e.status !== 400) throw e; if (e.status === 400 && !/model/i.test(e.message)) throw e; }
+    try { const t = await geminiOnce(m, system, contents, json); if (m !== S.settings.geminiModel && last && last.status === 404) { S.settings.geminiModel = m; save(); } return t; }
+    catch (e) { last = e; const st = e.status; if (st === 400 && !/model/i.test(e.message)) throw e; if (![400, 404, 429, 500, 503].includes(st)) throw e; }
   }
   throw last;
 }
