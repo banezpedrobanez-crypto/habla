@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Habla</title>
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="Practica hablar en público, expresarte mejor y aprender inglés.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header id="top">
+  <div id="title">🎙️ Habla</div>
+  <div id="streak"></div>
+</header>
+<main id="view"></main>
+<nav id="nav">
+  <button data-v="inicio"><span>🏠</span>Inicio</button>
+  <button data-v="hablar"><span>🎤</span>Hablar</button>
+  <button data-v="expresar"><span>💬</span>Expresarme</button>
+  <button data-v="ingles"><span>🇺🇸</span>Inglés</button>
+  <button data-v="mas"><span>☰</span>Más</button>
+</nav>
+<div id="toast"></div>
+<div id="overlay" hidden></div>
+<script src="core.js"></script>
+<script src="hablar.js"></script>
+<script src="expresar.js"></script>
+<script src="ingles.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
