@@ -23,7 +23,7 @@ const DEF = {
   streak: { last: null, count: 0 },
   settings: {
     geminiKey: '', groqKey: '',
-    geminiModel: 'gemini-2.5-flash', groqModel: 'llama-3.3-70b-versatile', whisperModel: 'whisper-large-v3-turbo',
+    geminiModel: 'gemini-flash-latest', groqModel: 'openai/gpt-oss-120b', whisperModel: 'whisper-large-v3-turbo',
     volTarget: 45, ttsRate: 0.95, dailyGoal: 10
   }
 };
@@ -53,31 +53,51 @@ const DB = {
 
 /* ===== IA: Gemini -> Groq (respaldo) ===== */
 const hasAI = () => !!(S.settings.geminiKey || S.settings.groqKey);
-async function geminiCall(system, contents, json) {
+const GEM_MODELS = ['gemini-flash-latest', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.0-flash'];
+async function geminiOnce(model, system, contents, json) {
   const body = { contents, generationConfig: { temperature: 0.8 } };
   if (system) body.system_instruction = { parts: [{ text: system }] };
   if (json) body.generationConfig.response_mime_type = 'application/json';
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(S.settings.geminiModel)}:generateContent`, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.settings.geminiKey }, body: JSON.stringify(body)
   });
-  if (!r.ok) throw new Error('Gemini ' + r.status + ' ' + (await r.text()).slice(0, 160));
+  if (!r.ok) { const e = new Error('Gemini ' + r.status + ' ' + (await r.text()).slice(0, 160)); e.status = r.status; throw e; }
   const d = await r.json();
   const t = d?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   if (!t) throw new Error('Gemini sin respuesta');
   return t;
 }
-async function groqCall(system, msgs, json) {
+async function geminiCall(system, contents, json) {
+  const list = [S.settings.geminiModel, ...GEM_MODELS.filter(m => m !== S.settings.geminiModel)];
+  let last;
+  for (const m of list) {
+    try { const t = await geminiOnce(m, system, contents, json); if (m !== S.settings.geminiModel) { S.settings.geminiModel = m; save(); } return t; }
+    catch (e) { last = e; if (e.status !== 404 && e.status !== 400) throw e; if (e.status === 400 && !/model/i.test(e.message)) throw e; }
+  }
+  throw last;
+}
+const GROQ_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.1-8b-instant'];
+async function groqOnce(model, system, msgs, json) {
   const messages = [];
   if (system) messages.push({ role: 'system', content: system + (json ? '\nResponde SOLO con JSON válido.' : '') });
   msgs.forEach(m => messages.push({ role: m.role === 'model' ? 'assistant' : m.role, content: m.text }));
-  const body = { model: S.settings.groqModel, messages, temperature: 0.8 };
+  const body = { model, messages, temperature: 0.8 };
   if (json) body.response_format = { type: 'json_object' };
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.settings.groqKey }, body: JSON.stringify(body)
   });
-  if (!r.ok) throw new Error('Groq ' + r.status + ' ' + (await r.text()).slice(0, 160));
+  if (!r.ok) { const e = new Error('Groq ' + r.status + ' ' + (await r.text()).slice(0, 160)); e.status = r.status; throw e; }
   const d = await r.json();
   return d.choices?.[0]?.message?.content || '';
+}
+async function groqCall(system, msgs, json) {
+  const list = [S.settings.groqModel, ...GROQ_MODELS.filter(m => m !== S.settings.groqModel)];
+  let last;
+  for (const m of list) {
+    try { const t = await groqOnce(m, system, msgs, json); if (m !== S.settings.groqModel) { S.settings.groqModel = m; save(); } return t; }
+    catch (e) { last = e; if (!(e.status === 404 || (e.status === 400 && /model|decommission/i.test(e.message)))) throw e; }
+  }
+  throw last;
 }
 /** msgs: [{role:'user'|'assistant', text}] */
 async function ai(system, msgs, json = false) {
